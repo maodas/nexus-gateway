@@ -70,7 +70,6 @@ def record_department_usage(
     """
     dept_clean = department.strip().lower() if department else "general"
 
-    # Granular request type counter increments
     if is_cached:
         redis_incrby(f"nexus:dept:{dept_clean}:cached_requests", 1)
     else:

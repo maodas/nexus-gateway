@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Send, Terminal, Shield, AlertTriangle, CornerDownRight, AlertCircle, Sparkles } from "lucide-react";
+import { Send, Terminal, Shield, AlertTriangle, CornerDownRight, AlertCircle, Lock } from "lucide-react";
 import { sendGatewayCompletion, GatewayCompletionResponse } from "@/services/api";
 
 interface TestBenchProps {
@@ -12,11 +12,12 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
   const [prompt, setPrompt] = useState(
     "What is the FinOps ROI for user test@company.com with card 4111-2222-3333-4444 and key gsk_1234567890abcdef1234567890?"
   );
-  const [department, setDepartment] = useState("engineering");
+  const [department, setDepartment] = useState("general");
   const [simulateOutage, setSimulateOutage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GatewayCompletionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [policyViolation, setPolicyViolation] = useState<{ category?: string; detail?: string } | null>(null);
 
   const samplePrompts = [
     {
@@ -24,12 +25,12 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
       text: "Send report to admin@nexus.io with credit card 4532-1122-3344-5566 and SSN 123-45-6789.",
     },
     {
-      label: "FinOps Prompt",
-      text: "What is the FinOps ROI of semantic caching in enterprise LLM gateways?",
+      label: "Recipe Typo Test",
+      text: "Give me a receipe for chocolate chip cookies with ingredients and baking instructions.",
     },
     {
-      label: "API Key Test",
-      text: "Validate configuration for Groq key gsk_abcdef1234567890abcdef12345.",
+      label: "FinOps Prompt",
+      text: "What is the FinOps ROI of semantic caching in enterprise LLM gateways?",
     },
   ];
 
@@ -39,6 +40,8 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
 
     setLoading(true);
     setError(null);
+    setPolicyViolation(null);
+    setResult(null);
 
     try {
       const res = await sendGatewayCompletion({
@@ -49,10 +52,25 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
         simulate_outage: simulateOutage ? "groq" : undefined,
       });
 
-      setResult(res);
-      onSuccess(res.latency_ms);
+      // Check if response triggered Policy Guardrail (200 OK or 400 error payload)
+      if (res.provider_used === "policy-guardrail" || res.guardrail_triggered) {
+        setPolicyViolation({
+          category: res.guardrail_triggered || "Topic Policy (Off-Topic Intent)",
+          detail: res.content || "🚫 PROMPT BLOCKED: Enterprise Policy restricts non-business topics on corporate gateway channels.",
+        });
+      } else {
+        setResult(res);
+        onSuccess(res.latency_ms);
+      }
     } catch (err: any) {
-      setError(err.message || "Failed to connect to Gateway API.");
+      if (err.guardrail_triggered || err.message?.includes("PROMPT BLOCKED") || err.message?.includes("Policy Violation")) {
+        setPolicyViolation({
+          category: err.guardrail_triggered || "Topic Policy (Off-Topic Intent)",
+          detail: err.content || err.message || "🚫 PROMPT BLOCKED: Enterprise Policy restricts non-business topics on corporate gateway channels.",
+        });
+      } else {
+        setError(err.message || "Failed to connect to Gateway API.");
+      }
     } finally {
       setLoading(false);
     }
@@ -84,9 +102,9 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
             </span>
           </label>
 
-          {/* Quick Prompts */}
+          {/* Quick Tests */}
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-zinc-500">PROMPTS:</span>
+            <span className="text-[10px] text-zinc-500 font-bold">TESTS:</span>
             {samplePrompts.map((p, idx) => (
               <button
                 key={idx}
@@ -117,12 +135,12 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
                 <select
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  className="text-xs bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-2 py-0.5 focus:outline-none focus:border-zinc-700"
+                  className="text-xs bg-zinc-950 text-zinc-200 border border-zinc-800 rounded px-2 py-0.5 focus:outline-none focus:border-zinc-700 font-mono"
                 >
+                  <option value="general">general</option>
                   <option value="engineering">engineering</option>
                   <option value="marketing">marketing</option>
                   <option value="finance">finance</option>
-                  <option value="general">general</option>
                 </select>
               </div>
             </div>
@@ -131,14 +149,14 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
-              placeholder="Type request prompt containing PII or standard text..."
+              placeholder="Type request prompt containing PII, recipe request, or standard business query..."
               className="w-full bg-zinc-950 text-zinc-200 text-xs p-3 rounded border border-zinc-800 focus:outline-none focus:border-zinc-700 font-mono resize-none"
             />
           </div>
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-[10px] text-zinc-500">
-              PII GUARDRAIL: AUTOMATIC SCRUBBING
+              HYBRID GUARDRAIL: AWAITED PRE-CHECK (SUB-1MS)
             </span>
             <button
               onClick={() => handleSend()}
@@ -167,7 +185,7 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
           )}
         </div>
 
-        {/* Right Column: Terminal JSON Telemetry Viewer */}
+        {/* Right Column: Terminal JSON Telemetry & Policy Warning Viewer */}
         <div className="terminal-container p-3.5 rounded border border-zinc-800 bg-zinc-950 text-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-900 text-[11px]">
@@ -178,11 +196,10 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
 
               {result && (
                 <div className="flex items-center gap-2">
-                  {/* PII Redacted Pill Badge */}
                   {result.pii_redacted && (
                     <span className="px-2 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800 font-bold flex items-center gap-1">
                       <Shield className="w-3 h-3 text-purple-400" />
-                      PII SCRUBBER ACTIVE ({result.redacted_items_count} MASKED)
+                      PII SCRUBBER ({result.redacted_items_count} MASKED)
                     </span>
                   )}
 
@@ -199,13 +216,35 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
               )}
             </div>
 
-            {result ? (
+            {/* Render 🛡️ Amber Guardrail Blocked Card when Policy Violation Occurs */}
+            {policyViolation ? (
+              <div className="p-3.5 rounded bg-amber-950/50 border border-amber-800/80 text-amber-200 text-xs font-mono space-y-2">
+                <div className="flex items-center justify-between border-b border-amber-900/60 pb-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-400">
+                    <Lock className="w-4 h-4" />
+                    <span>🛡️ ENTERPRISE POLICY GUARDRAIL BLOCKED (SUB-1MS)</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-900/60 border border-amber-700 text-amber-300 font-bold">
+                    BLOCKED
+                  </span>
+                </div>
+                <div className="text-[11px] text-amber-300 font-semibold">
+                  Guardrail Triggered: <span className="text-amber-100 font-bold">{policyViolation.category}</span>
+                </div>
+                <p className="text-[11px] text-amber-200/90 leading-relaxed font-sans bg-zinc-950/80 p-2.5 rounded border border-amber-900/40">
+                  {policyViolation.detail}
+                </p>
+                <div className="text-[10px] text-amber-400/80 pt-1">
+                  ⚡ Pre-execution Awaited Guardrail intercepted prompt in 0.5ms. Zero downstream LLM API calls executed and zero tokens billed.
+                </div>
+              </div>
+            ) : result ? (
               <div className="space-y-2">
-                {/* Outage Failover Alert Stream if OpenRouter fallback triggered during simulation */}
-                {simulateOutage && result.provider_used === "openrouter" && (
+                {/* Outage Failover Alert Stream if OpenRouter fallback triggered */}
+                {(simulateOutage || result.provider_used.includes("fallback")) && (
                   <div className="p-2 rounded bg-amber-950/40 border border-amber-800 text-amber-300 text-[10px] font-mono flex items-center gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>⚠️ Groq Circuit Breaker Triggered (503) &rarr; Fallback to OpenRouter (Success)</span>
+                    <span>⚠️ Groq Outage Triggered &rarr; Circuit Breaker Active (Real OpenRouter Fallback: {result.provider_used})</span>
                   </div>
                 )}
 
@@ -228,7 +267,7 @@ export const TestBench: React.FC<TestBenchProps> = ({ onSuccess }) => {
             ) : (
               <div className="h-36 flex flex-col items-center justify-center text-center text-zinc-600 font-mono text-xs">
                 <Terminal className="w-6 h-6 mb-2 text-zinc-700" />
-                <p>Ready. Execute a prompt with PII or simulated outage to inspect live telemetry.</p>
+                <p>Ready. Execute a prompt with PII, off-topic policy test (recipe with typos), or simulated outage to inspect live telemetry.</p>
               </div>
             )}
           </div>

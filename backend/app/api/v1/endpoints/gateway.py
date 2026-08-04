@@ -18,7 +18,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     response_model=GatewayChatResponse,
     summary="LLM Gateway Completions Proxy",
-    description="Route completion requests to optimal provider (Groq/OpenRouter) with PII guardrail scrubbing and circuit-breaker fallback resilience."
+    description="Route completion requests to optimal provider (Groq/OpenRouter) with Enterprise Policy Guardrails, PII scrubbing, and circuit-breaker resilience."
 )
 async def create_chat_completion(
     request: GatewayChatRequest,

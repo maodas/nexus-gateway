@@ -10,7 +10,7 @@ export const apiClient = axios.create({
     "X-Nexus-Auth-Key": GATEWAY_AUTH_KEY,
     "X-Gateway-API-Key": GATEWAY_AUTH_KEY,
   },
-  timeout: 15000,
+  timeout: 30000, // Increased timeout to 30 seconds for safety
 });
 
 export interface AnalyticsSummary {
@@ -56,6 +56,7 @@ export interface GatewayCompletionResponse {
   latency_ms: number;
   pii_redacted?: boolean;
   redacted_items_count?: number;
+  guardrail_triggered?: string;
 }
 
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
@@ -94,7 +95,13 @@ export async function sendGatewayCompletion(
     });
     return response.data;
   } catch (error: any) {
-    console.error("Gateway completion request failed:", error);
-    throw new Error(error?.response?.data?.detail || "Gateway API Error");
+    const detail = error?.response?.data?.detail;
+    if (detail && typeof detail === "object") {
+      const errObj: any = new Error(detail.content || detail.detail || "Gateway Policy Blocked");
+      errObj.guardrail_triggered = detail.guardrail_triggered || "Topic Policy (Off-Topic Intent)";
+      errObj.content = detail.content || detail.detail || "🚫 PROMPT BLOCKED: Enterprise Policy restricts non-business topics on corporate channels.";
+      throw errObj;
+    }
+    throw new Error(error?.response?.data?.detail || error.message || "Gateway API Error");
   }
 }
