@@ -7,6 +7,7 @@ import { MetricCard } from "@/components/MetricCard";
 import { ChartsSection } from "@/components/ChartsSection";
 import { TestBench } from "@/components/TestBench";
 import { WelcomeModal } from "@/components/WelcomeModal";
+import { Footer } from "@/components/Footer";
 import { getAnalyticsSummary, AnalyticsSummary } from "@/services/api";
 
 export default function DashboardPage() {
@@ -174,12 +175,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Developer Footer */}
-      <footer className="border-t border-zinc-900 py-4 bg-zinc-950 text-center text-xs text-zinc-500 font-mono">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>NexusGateway v1.0.0 &mdash; Telemetry &amp; Department Volume Fix</span>
-          <span>FastAPI &bull; Upstash Redis &bull; Groq &bull; OpenRouter &bull; Next.js</span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
