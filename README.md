@@ -34,113 +34,108 @@ NexusGateway is a high-performance, enterprise-grade LLM FinOps autopilot and re
 │                                           │ Fallback: OpenRouter Resilience Route    │ │
 │                                           └──────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
-✨ Key Technical Capabilities
-1. 💰 FinOps Autopilot & Token Governance
+---
 
-    Department Budget Isolation: Tracks usage, token volume, and dollar spend across departments (Engineering, Finance, Marketing, General). Enforces budget caps to prevent runaway API costs.
+## ✨ Key Technical Capabilities
 
-    Dynamic Arbitrage Calculation: Measures prompt execution costs against standard industry benchmarks (GPT-4o baseline) to calculate dynamic dollars saved ($).
+### 💰 FinOps Autopilot & Token Governance
+- **Department Budget Isolation**: Tracks usage, token volume, and dollar spend across departments (`Engineering`, `Finance`, `Marketing`, `General`). Enforces budget caps to prevent runaway API costs.
+- **Dynamic Arbitrage Calculation**: Measures prompt execution costs against standard industry benchmarks (GPT-4o baseline) to calculate dynamic dollars saved ($).
 
-2. ⚡ Sub-Millisecond Semantic Response Caching
+### ⚡ Sub-Millisecond Semantic Response Caching
+- **Namespaced Upstash Redis Cache**: Fast lookup using prompt normalization and SHA-256 hashing.
+- **Instant Speedup & Zero Token Cost**: Serves identical or semantically similar prompts in <2.5 ms with $0.00 LLM cost.
 
-    Namespaced Upstash Redis Cache: Fast lookup using prompt normalization and SHA-256 hashing.
+### 🛡️ Dual-Layer Enterprise Guardrails & Security
+- **Layer 1 (Sub-1ms Regex Pre-Check)**: Fast deterministic filtering of prohibited categories (off-topic non-business prompts) with typo-tolerant matching.
+- **Layer 2 (Semantic Intent Judge)**: Non-blocking small LLM evaluation (`llama-3.1-8b-instant`) to classify user intent against corporate compliance policies.
+- **PII Data Scrubber**: Intercepts and masks sensitive credentials (Credit Cards, SSNs, Emails, API Keys) before sending requests to external providers.
 
-    Instant Speedup & Zero Token Cost: Serves identical or semantically similar prompts in <2.5 ms with $0.00 LLM cost.
+### 🔄 Circuit Breaker Resilience & Chaos Engineering
+- **Automated Failover**: Real-time circuit breaker tracking provider health states (`HEALTHY`, `OPEN`, `HALF_OPEN`).
+- **Zero-Downtime Provider Arbitrage**: Seamlessly fails over from primary provider (Groq) to secondary provider (OpenRouter) during HTTP 500/503 outages or rate limits.
+- **Chaos Testing Outage Simulator**: Integrated toggle switch to simulate primary provider outages and test resilience in real-time.
 
-3. 🛡️ Dual-Layer Enterprise Guardrails & Security
+---
 
-    Layer 1 (Sub-1ms Regex Pre-Check): Fast deterministic filtering of prohibited categories (off-topic non-business prompts) with typo-tolerant matching.
+## 🛠️ Technology Stack
 
-    Layer 2 (Semantic Intent Judge): Non-blocking small LLM evaluation (llama-3.1-8b-instant) to classify user intent against corporate compliance policies.
+- **Backend Framework**: Python 3.11, FastAPI, Uvicorn (Async IO Event Loop)
+- **HTTP Client**: `httpx.AsyncClient` (Non-blocking asynchronous calls)
+- **Cache & Telemetry Database**: Upstash Redis (Serverless REST API)
+- **LLM Providers**: Groq API (`llama-3.3-70b-versatile`), OpenRouter API (`openrouter/free`)
+- **Frontend Dashboard**: Next.js 15, TypeScript, Tailwind CSS, Chart.js / Lucide Icons
+- **DevOps & Cloud Pipeline**: Vercel (Frontend Edge) + Render (Backend Container)
 
-    PII Data Scrubber: Intercepts and masks sensitive credentials (Credit Cards, SSNs, Emails, API Keys) before sending requests to external providers.
+---
 
-4. 🔄 Circuit Breaker Resilience & Chaos Engineering
+## 🚀 Quickstart & Local Setup
 
-    Automated Failover: Real-time circuit breaker tracking provider health states (HEALTHY, OPEN, HALF_OPEN).
-
-    Zero-Downtime Provider Arbitrage: Seamlessly fails over from primary provider (Groq) to secondary provider (OpenRouter) during HTTP 500/503 outages or rate limits.
-
-    Chaos Testing Outage Simulator: Integrated toggle switch to simulate primary provider outages and test resilience in real-time.
-
-🛠️ Technology Stack
-
-    Backend Framework: Python 3.11, FastAPI, Uvicorn (Async IO Event Loop)
-
-    HTTP Client: httpx.AsyncClient (Non-blocking asynchronous calls)
-
-    Cache & Telemetry Database: Upstash Redis (Serverless REST API)
-
-    LLM Providers: Groq API (llama-3.3-70b-versatile), OpenRouter API (openrouter/free)
-
-    Frontend Dashboard: Next.js 15, TypeScript, Tailwind CSS, Chart.js / Lucide Icons
-
-    DevOps & Cloud Pipeline: Vercel (Frontend Edge) + Render (Backend Container)
-
-🚀 Quickstart & Local Setup
-1. Clone Repository
-Bash
-
-git clone [https://github.com/maodas/nexus-gateway.git](https://github.com/maodas/nexus-gateway.git)
+### 1. Clone Repository
+```bash
+git clone https://github.com/maodas/nexus-gateway.git
 cd nexus-gateway
+```
 
-2. Backend Configuration
-Bash
-
+### 2. Backend Configuration
+```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
+```
 
-Create .env file inside backend/:
-Code snippet
-
+Create `.env` file inside `backend/`:
+```env
 PROJECT_NAME="NexusGateway"
 GROQ_API_KEY="gsk_your_groq_api_key"
 OPENROUTER_API_KEY="sk-or-v1-your_openrouter_api_key"
-UPSTASH_REDIS_REST_URL="[https://your-upstash-redis.upstash.io](https://your-upstash-redis.upstash.io)"
+UPSTASH_REDIS_REST_URL="https://your-upstash-redis.upstash.io"
 UPSTASH_REDIS_REST_TOKEN="your_upstash_redis_token"
 GATEWAY_AUTH_KEY="nexus-secret-auth-key"
+```
 
 Start Backend Server:
-Bash
-
+```bash
 uvicorn main:app --reload --port 8000
+```
 
-3. Frontend Dashboard Setup
-Bash
-
+### 3. Frontend Dashboard Setup
+```bash
 cd ../frontend
 npm install
+```
 
-Create .env.local inside frontend/:
-Code snippet
-
+Create `.env.local` inside `frontend/`:
+```env
 NEXT_PUBLIC_API_URL="http://localhost:8000"
 NEXT_PUBLIC_GATEWAY_AUTH_KEY="nexus-secret-auth-key"
+```
 
 Start Development Server:
-Bash
-
+```bash
 npm run dev -- -p 3002
+```
 
-Access the dashboard at http://localhost:3002.
-📊 API Reference
-POST /api/v1/gateway/chat/completions
+---
+
+## 📊 API Reference
+
+### `POST /api/v1/gateway/chat/completions`
 
 Send a completion request through the smart router engine.
 
-Headers:
-HTTP
-
+#### Headers:
+```http
 Content-Type: application/json
 X-Gateway-API-Key: nexus-secret-auth-key
-X-Simulate-Outage: groq  (Optional: trigger chaos testing failover)
+X-Simulate-Outage: groq
+```
 
-Request Body:
-JSON
-
+#### Request Body:
+```json
 {
   "department": "engineering",
   "messages": [
@@ -148,7 +143,10 @@ JSON
   ],
   "temperature": 0.7
 }
+```
 
-📄 License
+---
 
-Distributed under the MIT License. Developed by Marcos Rodas (@maodas).
+## 📄 License
+
+Distributed under the MIT License. Developed by Marcos Rodas ([@maodas](https://github.com/maodas)).
