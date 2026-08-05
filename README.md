@@ -19,7 +19,7 @@ NexusGateway is a high-performance, enterprise-grade LLM FinOps autopilot and re
                                               │ HTTP Requests
                                               ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ NEXUSGATEWAY ROUTER ENGINE (FastAPI)                                                    │
+│ NEXUSGATEWAY ROUTER ENGINE (FastAPI)                                                   │
 │                                                                                        │
 │  ┌────────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐  │
 │  │ Layer 1/2 Guardrails   ├───►│ PII Regex Scrubber     ├───►│ Upstash Semantic     │  │
