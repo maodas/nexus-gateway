@@ -111,7 +111,6 @@ class RouterEngine:
             "Content-Type": "application/json"
         }
 
-        # Sanitize messages to explicit role & content fields to avoid null keys
         clean_messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
         payload = {
@@ -142,8 +141,6 @@ class RouterEngine:
         }
 
         target_model = model if model and "/" in model else OPENROUTER_DEFAULT_MODEL
-
-        # Explicitly build clean message dicts to strip extra Pydantic null fields
         clean_messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
 
         payload = {
@@ -206,11 +203,11 @@ class RouterEngine:
            - If blocked: Return INSTANT GatewayChatResponse (provider_used="policy-guardrail").
         2. Check department budget limit. If exceeded, raise HTTP 429.
         3. PII Guardrail Scrubbing on user prompt messages.
-        4. OUTAGE CHECK: If outage simulation is active, BYPASS semantic cache entirely!
+        4. OUTAGE CHECK: If outage simulation is active, BYPASS semantic cache & CLEAR stale cache key!
         5. Query Semantic Cache (if outage simulation is NOT active).
         6. Provider Selection & REAL OpenRouter Fallback Execution.
         7. Record department usage & budget spend in Redis.
-        8. Cache response in Redis.
+        8. Cache response in Redis ONLY IF non-fallback and primary provider used (groq).
         9. Return GatewayChatResponse payload.
         """
         start_time = time.time()
@@ -219,7 +216,7 @@ class RouterEngine:
 
         raw_prompt = request.messages[-1].content if request.messages else ""
 
-        # --- STEP 1: STRICT PRE-EXECUTION GUARDRAIL (AWAITED COROUTINE PRE-CHECK AT LINE 1) ---
+        # --- STEP 1: STRICT PRE-EXECUTION GUARDRAIL ---
         is_allowed, category, violation_msg = await validate_enterprise_policy(raw_prompt)
         if not is_allowed:
             latency_ms = (time.time() - start_time) * 1000.0 + 0.5
@@ -274,6 +271,9 @@ class RouterEngine:
                 cached_response.pii_redacted = pii_matches_count > 0
                 cached_response.redacted_items_count = pii_matches_count
                 return cached_response
+        else:
+            # Clear any existing cached response for this prompt during simulated outage
+            semantic_cache.clear_cached_response(sanitized_prompt)
 
         # --- Step 6: Provider Selection & REAL Fallback Execution ---
         primary_provider, target_model = self.select_optimal_provider(request, simulate_outage=simulate_groq_outage)
@@ -345,7 +345,8 @@ class RouterEngine:
                     cost_info["dollars_saved_usd"],
                     is_cached=False
                 )
-                semantic_cache.store_cached_response(sanitized_prompt, response_obj)
+                # DO NOT cache mock fallback response
+                semantic_cache.clear_cached_response(sanitized_prompt)
                 return response_obj
 
         # --- Step 7: Parse Response ---
@@ -375,7 +376,7 @@ class RouterEngine:
             redacted_items_count=pii_matches_count
         )
 
-        # --- Step 8 & 9: Record Usage & Store Cache ---
+        # --- Step 8: Record Department Usage ---
         record_department_usage(
             department,
             response_obj.total_tokens,
@@ -383,7 +384,15 @@ class RouterEngine:
             cost_info["dollars_saved_usd"],
             is_cached=False
         )
-        semantic_cache.store_cached_response(sanitized_prompt, response_obj)
+
+        # --- Step 9: Store Cache ONLY IF non-fallback, non-outage, and primary provider (groq) used ---
+        if not simulate_groq_outage and provider_used == "groq":
+            semantic_cache.store_cached_response(sanitized_prompt, response_obj)
+        else:
+            logger.info(
+                f"🛡️ Cache storage skipped for non-primary or fallback provider (provider: '{provider_used}', outage: {simulate_groq_outage})"
+            )
+            semantic_cache.clear_cached_response(sanitized_prompt)
 
         return response_obj
 

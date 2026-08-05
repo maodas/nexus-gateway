@@ -70,6 +70,21 @@ def redis_set(key: str, value: Any, ex: Optional[int] = None) -> bool:
         return False
 
 
+def redis_del(key: str) -> bool:
+    """
+    Safely delete key from Redis without throwing exceptions.
+    """
+    client = get_redis_client()
+    if not client:
+        return False
+    try:
+        client.delete(key)
+        return True
+    except Exception as e:
+        logger.warning(f"Redis DEL failed for key '{key}': {e}")
+        return False
+
+
 def redis_incrby(key: str, amount: int) -> Optional[int]:
     """
     Safely increment integer value in Redis key.
