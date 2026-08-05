@@ -23,7 +23,7 @@ NexusGateway is a high-performance, enterprise-grade LLM FinOps autopilot and re
 │                                                                                        │
 │  ┌────────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐  │
 │  │ Layer 1/2 Guardrails   ├───►│ PII Regex Scrubber     ├───►│ Upstash Semantic     │  │
-│  │ (Intent & Policy)      │    │ (Card/SSN/API Redact) │    │ Cache (SHA-256)      │  │
+│  │ (Intent & Policy)      │    │ (Card/SSN/API Redact)  │    │ Cache (SHA-256)      │  │
 │  └────────────────────────┘    └────────────────────────┘    └──────────┬───────────┘  │
 │                                                                         │              │
 │                                           ┌─────────────────────────────┴────────────┐ │
