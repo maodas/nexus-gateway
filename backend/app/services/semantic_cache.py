@@ -6,7 +6,7 @@ import hashlib
 import json
 import logging
 import time
-from typing import Optional
+from typing import Optional, Any, Union
 from app.core.redis import redis_get, redis_set, redis_del
 from app.schemas.gateway import GatewayChatResponse
 
@@ -58,7 +58,7 @@ class SemanticCacheService:
 
             # Safety check: Evict any stale fallback or guardrail response if found in Redis
             provider_used = str(data.get("provider_used", "")).lower()
-            if "fallback" in provider_used or "policy-guardrail" in provider_used or data.get("fallback_triggered"):
+            if "fallback" in provider_used or "policy-guardrail" in provider_used or data.get("fallback_triggered") or data.get("guardrail_triggered"):
                 logger.warning(f"⚠️ Stale fallback response detected in cache for key '{redis_key}'. Evicting key.")
                 self.clear_cached_response(prompt_text)
                 return None
@@ -75,7 +75,8 @@ class SemanticCacheService:
                 total_tokens=data.get("total_tokens", 0),
                 estimated_cost_usd=0.0,  # Zero cost for cached hits
                 cached=True,
-                latency_ms=2.5  # Sub-millisecond / ultra-low cache response time
+                latency_ms=2.5,  # Sub-millisecond / ultra-low cache response time
+                guardrail_triggered=data.get("guardrail_triggered", None)
             )
         except Exception as e:
             logger.warning(f"Failed to parse cached response payload: {e}")
@@ -95,7 +96,7 @@ class SemanticCacheService:
     def store_cached_response(
         self,
         prompt_text: str,
-        response: GatewayChatResponse,
+        response: Union[GatewayChatResponse, dict, Any],
         ttl_seconds: int = CACHE_TTL_DEFAULT_SECONDS
     ) -> bool:
         """
@@ -105,26 +106,49 @@ class SemanticCacheService:
 
         Args:
             prompt_text (str): User prompt text.
-            response (GatewayChatResponse): Outbound response payload.
+            response (Union[GatewayChatResponse, dict, Any]): Outbound response payload.
             ttl_seconds (int): Cache TTL duration in seconds.
 
         Returns:
             bool: True if cached successfully, False otherwise.
         """
-        if not prompt_text or response.cached:
+        if not prompt_text:
             return False
 
-        provider_lower = str(response.provider_used).lower()
+        # Safely extract properties whether response is a Pydantic model, dictionary, or object
+        if isinstance(response, dict):
+            is_cached = response.get("cached", False)
+            provider_used = str(response.get("provider_used", "")).lower()
+            guardrail_triggered = response.get("guardrail_triggered", None)
+            resp_id = response.get("id", "chatcmpl")
+            model_used = response.get("model_used", "")
+            content = response.get("content", "")
+            prompt_tokens = response.get("prompt_tokens", 0)
+            completion_tokens = response.get("completion_tokens", 0)
+            total_tokens = response.get("total_tokens", 0)
+        else:
+            is_cached = getattr(response, "cached", False)
+            provider_used = str(getattr(response, "provider_used", "")).lower()
+            guardrail_triggered = getattr(response, "guardrail_triggered", None)
+            resp_id = getattr(response, "id", "chatcmpl")
+            model_used = getattr(response, "model_used", "")
+            content = getattr(response, "content", "")
+            prompt_tokens = getattr(response, "prompt_tokens", 0)
+            completion_tokens = getattr(response, "completion_tokens", 0)
+            total_tokens = getattr(response, "total_tokens", 0)
+
+        if is_cached:
+            return False
 
         # STRICT CHECK: Reject storing any fallback, outage, openrouter-fallback, or guardrail response
         if (
-            "fallback" in provider_lower
-            or "policy-guardrail" in provider_lower
-            or response.guardrail_triggered
+            "fallback" in provider_used
+            or "policy-guardrail" in provider_used
+            or guardrail_triggered is not None
         ):
             logger.warning(
                 f"🛡️ CACHE BYPASS: Refusing to store fallback/outage/guardrail response "
-                f"(provider: '{response.provider_used}') in Redis cache."
+                f"(provider: '{provider_used}') in Redis cache."
             )
             # Evict any existing stale cache entry for this prompt
             self.clear_cached_response(prompt_text)
@@ -135,19 +159,20 @@ class SemanticCacheService:
 
         try:
             payload = {
-                "id": response.id,
-                "provider_used": response.provider_used,
-                "model_used": response.model_used,
-                "content": response.content,
-                "prompt_tokens": response.prompt_tokens,
-                "completion_tokens": response.completion_tokens,
-                "total_tokens": response.total_tokens,
+                "id": resp_id,
+                "provider_used": provider_used,
+                "model_used": model_used,
+                "content": content,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
                 "created": int(time.time()),
+                "guardrail_triggered": guardrail_triggered,
             }
 
             success = redis_set(redis_key, json.dumps(payload), ex=ttl_seconds)
             if success:
-                logger.info(f"💾 Saved clean primary response ({response.provider_used}) to Redis cache key '{redis_key}' (TTL: {ttl_seconds}s)")
+                logger.info(f"💾 Saved clean primary response ({provider_used}) to Redis cache key '{redis_key}' (TTL: {ttl_seconds}s)")
             return success
         except Exception as e:
             logger.warning(f"Error storing response to semantic cache: {e}")

@@ -41,3 +41,4 @@ class GatewayChatResponse(BaseModel):
     latency_ms: float = Field(..., description="Total execution latency in milliseconds")
     pii_redacted: bool = Field(default=False, description="True if PII/sensitive tokens were sanitized")
     redacted_items_count: int = Field(default=0, description="Count of redacted sensitive data matches")
+    guardrail_triggered: Optional[str] = Field(default=None, description="Guardrail category triggered if prompt was blocked")
