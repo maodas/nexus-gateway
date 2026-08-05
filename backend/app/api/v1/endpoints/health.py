@@ -9,12 +9,12 @@ from app.core.redis import get_redis_client
 router = APIRouter()
 
 
-@router.get(
+@router.api_route(
     "/health",
+    methods=["GET", "HEAD"],
     status_code=status.HTTP_200_OK,
-    response_model=Dict[str, Any],
     summary="System Health & Diagnostics",
-    description="Check backend operational status, Redis connection, and service metadata."
+    description="Check backend operational status, Redis connection, and service metadata. Accepts GET and HEAD requests."
 )
 async def check_health() -> Dict[str, Any]:
     """
