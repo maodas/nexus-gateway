@@ -29,8 +29,8 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_DEFAULT_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
-OPENROUTER_BACKUP_MODEL = "mistralai/mistral-7b-instruct:free"
+OPENROUTER_DEFAULT_MODEL = "openrouter/free"
+OPENROUTER_BACKUP_MODEL = "google/gemini-2.5-flash:free"
 
 HTTP_TIMEOUT_SECONDS = 15.0
 
@@ -81,7 +81,7 @@ class RouterEngine:
             model_lower = request.model.lower()
             if "groq" in model_lower or "llama-3.3" in model_lower:
                 return "groq", request.model
-            elif "openrouter" in model_lower or "llama-3.1" in model_lower or "mistral" in model_lower or "/" in request.model:
+            elif "openrouter" in model_lower or "gemini" in model_lower or "/" in request.model:
                 return "openrouter", request.model
 
         if not simulate_outage and resilience_engine.is_provider_healthy("groq"):
@@ -111,9 +111,12 @@ class RouterEngine:
             "Content-Type": "application/json"
         }
 
+        # Sanitize messages to explicit role & content fields to avoid null keys
+        clean_messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+
         payload = {
             "model": model,
-            "messages": [msg.model_dump() for msg in request.messages],
+            "messages": clean_messages,
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
         }
@@ -128,7 +131,6 @@ class RouterEngine:
         Execute REAL, live completion request against OpenRouter API via httpx.AsyncClient.
         """
         api_key = settings.OPENROUTER_API_KEY
-        # Fixed: Real OpenRouter API keys start with 'sk-or-v1-'. Only reject explicit placeholder values.
         if not api_key or api_key.startswith("sk-or-your"):
             raise ValueError("OPENROUTER_API_KEY is not configured or uses placeholder value.")
 
@@ -141,9 +143,12 @@ class RouterEngine:
 
         target_model = model if model and "/" in model else OPENROUTER_DEFAULT_MODEL
 
+        # Explicitly build clean message dicts to strip extra Pydantic null fields
+        clean_messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+
         payload = {
             "model": target_model,
-            "messages": [msg.model_dump() for msg in request.messages],
+            "messages": clean_messages,
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
         }
@@ -299,8 +304,8 @@ class RouterEngine:
                 provider_used = "openrouter-fallback"
             except Exception as fallback_exc:
                 logger.error(
-                    f"❌ Real OpenRouter HTTP Fallback failed ({fallback_exc}). "
-                    f"Engaging resilient mock fallback engine."
+                    f"❌ Real OpenRouter HTTP Fallback hard failed: {fallback_exc}",
+                    exc_info=True
                 )
                 resilience_engine.record_failure("openrouter")
 
